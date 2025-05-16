@@ -40,3 +40,29 @@ if __name__ == "__main__":
         )
     except KeyboardInterrupt:
         print("\n[!] Test stopped.")
+
+
+# Function to check if the DNS query matches the target domain
+def is_target_domain(query_name, target_domains):
+    """
+    Check if the DNS query matches any domain in the target list.
+
+    query_name: The domain name from the DNS query (str)
+    target_domains: List of domains to spoof (list of str)
+    """
+    if not target_domains:
+        return True  # Spoof all domains if list is empty
+    return query_name in target_domains
+
+# Function to check if the DNS query comes from a target victim IP
+def is_target_victim(src_ip, target_ips):
+    """
+    Check if the source IP of the DNS query matches any IP in the target list.
+
+    src_ip: The source IP address from the DNS query (str)
+    target_ips: List of victim IPs to spoof (list of str)
+
+    """
+    if not target_ips:
+        return True  # Spoof all victims if list is empty
+    return src_ip in target_ips
