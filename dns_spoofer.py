@@ -28,7 +28,7 @@ def handle_dns_packet(packet):
 
 # test 
 if __name__ == "__main__":
-    interface = "enp0s3"  # Your network interface
+    interface = "enp0s3"  # network interface
 
     print("[*] Starting DNS spoof test. Press CTRL+C to stop.")
     try:
