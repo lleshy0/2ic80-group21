@@ -40,7 +40,7 @@ def classify_address(address):
 def get_mac_addr(ip):
     
     arp_req_pkt = scapy.Ether(dst="ff:ff:ff:ff:ff:ff") / scapy.ARP(pdst=ip)
-    answered = scapy.srp(arp_req_pkt, timeout=1, verbose=False)
+    answered, unanswered = scapy.srp(arp_req_pkt, timeout=1, verbose=False)
 
     if answered:
         return answered[0][1].hwsrc
