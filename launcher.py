@@ -85,7 +85,7 @@ def main():
     arp_parser = subparsers.add_parser('arp', help='ARP Poisoning attack')
     arp_parser.add_argument('--victim-ip', required=True, help='Target victim IP address')
     arp_parser.add_argument('--victim-mac', required=True, help='Target victim MAC address')
-    arp_parser.add_argument('--spoof-ip', required=True, help='IP address to spoof')
+    arp_parser.add_argument('--ip-to-spoof', required=True, help='IP address to spoof')
     arp_parser.add_argument('--interface', default=default_iface, help=f'Network interface (default: {default_iface})')
     arp_parser.add_argument('--interval', type=float, default=2.0, help='Spoofed packet repetition interval in seconds (default: 2.0)')
     arp_parser.add_argument('--attacker-ip', default=local_ip, help=f'Attacker IP address (default: {local_ip})')
@@ -121,8 +121,8 @@ def main():
             print(f"[!] Error: Invalid victim MAC address: {args.victim_mac}")
             sys.exit(1)
         
-        if not validate_ip(args.spoof_ip):
-            print(f"[!] Error: Invalid spoof IP address: {args.spoof_ip}")
+        if not validate_ip(args.ip_to_spoof):
+            print(f"[!] Error: Invalid spoof IP address: {args.ip_to_spoof}")
             sys.exit(1)
         
         if args.interval <= 0:
