@@ -73,7 +73,7 @@ def run_ssl_stripping(args):
         interface=args.interface or default_iface,
         ip_victim=args.target,
         ip_attacker=local_ip,
-        site_to_spoof=args.redirect
+        
     )
     ssl_stripper.strip()
 
