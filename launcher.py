@@ -108,7 +108,7 @@ def main():
     # SSL Stripping parser (fully implemented)
     ssl_parser = subparsers.add_parser('ssl', help='SSL Stripping attack')
     ssl_parser.add_argument('--target', required=True, help='Target IP address')
-    ssl_parser.add_argument('--redirect', required=True, help='Redirect HTTP site (e.g., example.com)')
+    ssl_parser.add_argument('--redirect', required=False, help='Redirect HTTP site (e.g., example.com)')
     ssl_parser.add_argument('--interface', default=default_iface, help=f'Network interface (default: {default_iface})')
     
     args = parser.parse_args()
